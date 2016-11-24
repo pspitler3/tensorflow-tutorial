@@ -54,20 +54,31 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
         with tf.variable_scope('_repeat'):
             rep = tf.transpose(
                 tf.expand_dims(tf.ones(shape=tf.pack([n_repeats, ])), 1), [1, 0])
+            print rep.get_shape().as_list()
             rep = tf.cast(rep, 'int32')
             x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
+            print x.get_shape().as_list()
             return tf.reshape(x, [-1])
 
     def _interpolate(im, x, y, out_size):
         with tf.variable_scope('_interpolate'):
             # constants
-            num_batch = tf.shape(im)[0]
-            height = tf.shape(im)[1]
-            width = tf.shape(im)[2]
-            channels = tf.shape(im)[3]
+            print im.get_shape().as_list()
+            #num_batch = tf.shape(im)[0]
+            #height = tf.shape(im)[1]
+            #width = tf.shape(im)[2]
+            #channels = tf.shape(im)[3]
+            
+            num_batch = 2
+            height = 60
+            width = 60
+            channels = 1
 
             x = tf.cast(x, 'float32')
             y = tf.cast(y, 'float32')
+            print 'x', x.get_shape().as_list()
+            print 'y', y.get_shape().as_list()
+            
             height_f = tf.cast(height, 'float32')
             width_f = tf.cast(width, 'float32')
             out_height = out_size[0]
@@ -85,6 +96,9 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             x1 = x0 + 1
             y0 = tf.cast(tf.floor(y), 'int32')
             y1 = y0 + 1
+            
+            print 'x0', x.get_shape().as_list()
+            print 'y0', y.get_shape().as_list()
 
             x0 = tf.clip_by_value(x0, zero, max_x)
             x1 = tf.clip_by_value(x1, zero, max_x)
@@ -93,6 +107,7 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             dim2 = width
             dim1 = width*height
             base = _repeat(tf.range(num_batch)*dim1, out_height*out_width)
+            print 'base', base.get_shape().as_list()
             base_y0 = base + y0*dim2
             base_y1 = base + y1*dim2
             idx_a = base_y0 + x0
@@ -103,11 +118,17 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             # use indices to lookup pixels in the flat image and restore
             # channels dim
             im_flat = tf.reshape(im, tf.pack([-1, channels]))
+            print 'im_flat', im_flat.get_shape().as_list()
             im_flat = tf.cast(im_flat, 'float32')
             Ia = tf.gather(im_flat, idx_a)
             Ib = tf.gather(im_flat, idx_b)
             Ic = tf.gather(im_flat, idx_c)
             Id = tf.gather(im_flat, idx_d)
+            
+            print 'Ia', Ia.get_shape().as_list()
+            print 'Ib', Ib.get_shape().as_list()
+            print 'Ic', Ic.get_shape().as_list()
+            print 'Id', Id.get_shape().as_list()
 
             # and finally calculate interpolated values
             x0_f = tf.cast(x0, 'float32')
@@ -119,6 +140,12 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             wc = tf.expand_dims(((x-x0_f) * (y1_f-y)), 1)
             wd = tf.expand_dims(((x-x0_f) * (y-y0_f)), 1)
             output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
+            
+            print 'wa', wa.get_shape().as_list()
+            print 'wb', wb.get_shape().as_list()
+            print 'wc', wc.get_shape().as_list()
+            print 'wd', wd.get_shape().as_list()
+            print 'output', output.get_shape().as_list()
             return output
 
     def _meshgrid(height, width):
@@ -142,12 +169,20 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
 
     def _transform(theta, input_dim, out_size):
         with tf.variable_scope('_transform'):
-            num_batch = tf.shape(input_dim)[0]
-            height = tf.shape(input_dim)[1]
-            width = tf.shape(input_dim)[2]
-            num_channels = tf.shape(input_dim)[3]
-            theta = tf.reshape(theta, (-1, 2, 3))
+            print 'input', input_dim.get_shape().as_list()
+            #num_batch = tf.shape(input_dim)[0]
+            #height = tf.shape(input_dim)[1]
+            #width = tf.shape(input_dim)[2]
+            #num_channels = tf.shape(input_dim)[3]
+            
+            num_batch = 2
+            height = 60
+            width = 60
+            num_channels = 1
+            
+            theta = tf.reshape(theta, (-1, 3, 3))
             theta = tf.cast(theta, 'float32')
+            print 'theta', theta.get_shape().as_list()
 
             # grid of (x_t, y_t, 1), eq (1) in ref [1]
             height_f = tf.cast(height, 'float32')
@@ -155,17 +190,25 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             out_height = out_size[0]
             out_width = out_size[1]
             grid = _meshgrid(out_height, out_width)
+            print 'grid1', grid.get_shape().as_list()
             grid = tf.expand_dims(grid, 0)
+            print 'grid2', grid.get_shape().as_list()
             grid = tf.reshape(grid, [-1])
+            print 'grid3', grid.get_shape().as_list()
             grid = tf.tile(grid, tf.pack([num_batch]))
+            print 'grid4', grid.get_shape().as_list()
             grid = tf.reshape(grid, tf.pack([num_batch, 3, -1]))
+            print 'grid5', grid.get_shape().as_list()
 
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
             T_g = tf.batch_matmul(theta, grid)
+            print 'T_g', T_g.get_shape().as_list()
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
             y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
             x_s_flat = tf.reshape(x_s, [-1])
+            print 'x_s', x_s.get_shape().as_list()
             y_s_flat = tf.reshape(y_s, [-1])
+            print 'y_s', y_s.get_shape().as_list()
 
             input_transformed = _interpolate(
                 input_dim, x_s_flat, y_s_flat,
